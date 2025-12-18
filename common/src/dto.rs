@@ -1,0 +1,45 @@
+use std::fmt;
+use serde;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter, write};
+
+#[derive(Debug, Deserialize)]
+pub struct MarketApiResponse {
+    #[serde(rename = "clobTokenIds")]
+    pub clob_token_ids: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct MarketResponse {
+    pub first_asset_id: String,
+    pub second_asset_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OrderResponse {
+    pub token_id: String,
+    pub order_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Asset {
+    BTC,
+    ETH,
+    SOL,
+    XRP,
+    #[serde(other)]
+    Unknown,
+}
+
+impl Display for Asset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Asset::BTC => "btc",
+            Asset::ETH => "eth",
+            Asset::SOL => "sol",
+            Asset::XRP => "xrp",
+            Asset::Unknown => "UNKNOWN",
+        };
+        write!(f, "{s}")
+    }
+}

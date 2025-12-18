@@ -1,0 +1,13 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+polymarket-client-sdk = {workspace = true}
+alloy = {workspace = true}
+tokio = {workspace = true}
+rust_decimal = {workspace = true}
+reqwest = {workspace = true}
+serde = {workspace = true}
+chrono = {workspace = true}
