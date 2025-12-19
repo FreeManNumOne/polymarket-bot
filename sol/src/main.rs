@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
     let ok = client.ok().await?;
     println!("Client setup ok?: {ok}");
     let mut completed_timestamps: Vec<i64> = vec![];
+    let mut win_count: u32 = 0;
+    let mut loss_count: u32 = 0;
 
     loop {
         let timestamp = nearest_quarter_hour();
@@ -59,11 +61,13 @@ async fn main() -> anyhow::Result<()> {
                 "Failed to get tokens from API. Please check your network connection and try again later.",
             );
 
+        println!("win count: {}, loss count: {} | {}", win_count, loss_count, Asset::SOL);
+
         // skip if we already completed this timestamp
-        if completed_timestamps.contains(&timestamp) {
-            println!("Already completed timestamp: {}", timestamp);
-            continue;
-        }
+        // if completed_timestamps.contains(&timestamp) {
+        //     println!("Already completed timestamp: {}", timestamp);
+        //     continue;
+        // }
         'open_position: loop {
             match open_start_positions(
                 &client,
@@ -103,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
                                 println!("Hedge order status: {:?}", hedge_order_status.status);
                                 if hedge_order_status.status == "MATCHED" {
                                     println!("Hedge order matched");
+                                    win_count += 1;
                                     break 'hedge_order_loop;
                                 }
                                 sleep(Duration::from_secs(1)).await;
@@ -126,6 +131,7 @@ async fn main() -> anyhow::Result<()> {
                                     )
                                     .await?;
                                     println!("Initial position closed: {:?}", closed_order);
+                                    loss_count += 1;
                                     break 'hedge_order_loop;
                                 }
                             }
@@ -155,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
                                 println!("Hedge order status: {:?}", hedge_order_status.status);
                                 if hedge_order_status.status == "MATCHED" {
                                     println!("Hedge order matched");
+                                    win_count += 1;
                                     break 'hedge_order_loop;
                                 }
                                 sleep(Duration::from_secs(1)).await;
@@ -178,6 +185,7 @@ async fn main() -> anyhow::Result<()> {
                                     )
                                     .await?;
                                     println!("Initial position closed: {:?}", closed_order);
+                                    loss_count += 1;
                                     break 'hedge_order_loop;
                                 }
                             }
