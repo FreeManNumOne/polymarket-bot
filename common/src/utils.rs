@@ -12,11 +12,11 @@ use polymarket_client_sdk::types::{
     Side,
 };
 use reqwest::Client as http_client;
+use rust_decimal::prelude::Zero;
 use rust_decimal::{Decimal, RoundingStrategy};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use rust_decimal::prelude::Zero;
 use tokio::time::sleep;
 
 pub fn allow_stop_loss(market_timestamp: i64, grace_seconds: i64) -> bool {
@@ -110,6 +110,39 @@ pub async fn manage_position_after_match(
     signer: &LocalSigner<SigningKey>,
     hedge_config: HedgeConfig,
 ) -> polymarket_client_sdk::Result<i8> {
+    let second_order_status: OpenOrderResponse =
+        get_order_with_retry(client, hedge_config.hedge_asset_id.as_str(), 10).await?;
+    if second_order_status.size_matched > Decimal::zero() {
+        println!("Second order partially matched, closing it...");
+        let closing_second_size = floor_dp(second_order_status.size_matched, 2);
+        let closed_order: PostOrderResponse;
+        loop {
+            let response = close_order_by_market(
+                &client,
+                &signer,
+                &hedge_config.hedge_asset_id,
+                closing_second_size,
+            )
+            .await?;
+
+            match response.error_msg.as_deref() {
+                Some("") | None => {
+                    // успех
+                    closed_order = response;
+                    println!(
+                        "Second order after partially filling closed: {:?}",
+                        closed_order
+                    );
+                    break;
+                }
+                Some(err) => {
+                    println!("close order failed: {}", err);
+                    continue;
+                }
+            }
+        }
+    }
+
     let hedge_order: OrderResponse = place_hedge_order(
         &client,
         &signer,
@@ -134,7 +167,8 @@ pub async fn manage_position_after_match(
             println!("Stop loss reached, cancelling hedge order and closing position...");
             client.cancel_order(&hedge_order.order_id.as_str()).await?;
             println!("Hedge order canceled");
-            let hedge_order_status: OpenOrderResponse = get_order_with_retry(client, hedge_order.order_id.as_str(), 10).await?;
+            let hedge_order_status: OpenOrderResponse =
+                get_order_with_retry(client, hedge_order.order_id.as_str(), 10).await?;
             if hedge_order_status.size_matched > Decimal::zero() {
                 println!("Hedge order partially matched, closing it...");
                 let closing_hedge_size = floor_dp(hedge_order_status.size_matched, 2);
@@ -146,13 +180,16 @@ pub async fn manage_position_after_match(
                         &hedge_config.hedge_asset_id,
                         closing_hedge_size,
                     )
-                        .await?;
+                    .await?;
 
                     match response.error_msg.as_deref() {
                         Some("") | None => {
                             // успех
                             closed_order = response;
-                            println!("Hedge order after partially filling closed: {:?}", closed_order);
+                            println!(
+                                "Hedge order after partially filling closed: {:?}",
+                                closed_order
+                            );
                             break;
                         }
                         Some(err) => {
