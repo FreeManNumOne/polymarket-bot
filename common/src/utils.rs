@@ -93,6 +93,7 @@ pub async fn prevent_holding_position(
         &first_order_size
     );
     let true_hedge_config = HedgeConfig {
+        second_order_id: prevent_holding_config.hedge_config.second_order_id,
         hedge_asset_id: prevent_holding_config.hedge_config.hedge_asset_id,
         initial_asset_id: prevent_holding_config.hedge_config.initial_asset_id,
         hedge_size: first_order_size,
@@ -111,7 +112,7 @@ pub async fn manage_position_after_match(
     hedge_config: HedgeConfig,
 ) -> polymarket_client_sdk::Result<i8> {
     let second_order_status: OpenOrderResponse =
-        get_order_with_retry(client, hedge_config.hedge_asset_id.as_str(), 10).await?;
+        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 10).await?;
     if second_order_status.size_matched > Decimal::zero() {
         println!("Second order partially matched, closing it...");
         let closing_second_size = floor_dp(second_order_status.size_matched, 2);

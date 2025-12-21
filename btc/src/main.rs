@@ -89,11 +89,12 @@ async fn main() -> anyhow::Result<()> {
                 Ok(Some(orders)) => {
                     println!("Opened positions: {:?}", orders);
                     let first_order: OrderResponse = orders[0].clone();
+                    let first_order_id = first_order.order_id;
                     let second_order: OrderResponse = orders[1].clone();
                     sleep(Duration::from_secs(10)).await;
                     loop {
                         let first_order_status =
-                            get_order_with_retry(&client, &first_order.order_id, 10).await?;
+                            get_order_with_retry(&client, &first_order_id.as_str(), 10).await?;
 
                         let is_trade_allowed = allow_trade(timestamp, 30);
                         println!(
@@ -106,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
                             let matched_size = floor_dp(first_order_status.size_matched, 2);
                             if has_open_position_first {
                                 let hedge_config = HedgeConfig {
+                                    second_order_id: second_order.order_id.clone(),
                                     hedge_asset_id: tokens.second_asset_id.clone(),
                                     initial_asset_id: tokens.first_asset_id.clone(),
                                     hedge_size: matched_size,
@@ -131,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
 
                             if has_open_position_second {
                                 let hedge_config = HedgeConfig {
+                                    second_order_id: first_order_id.clone(),
                                     hedge_asset_id: tokens.first_asset_id.clone(),
                                     initial_asset_id: tokens.second_asset_id.clone(),
                                     hedge_size: matched_size,
@@ -157,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
                             client.cancel_order(&second_order.order_id).await?;
                             println!("Second order canceled, opening hedge order,,,");
                             let hedge_config = HedgeConfig {
+                                second_order_id: second_order.order_id,
                                 hedge_asset_id: tokens.second_asset_id,
                                 initial_asset_id: tokens.first_asset_id,
                                 hedge_size: order_size,
@@ -164,6 +168,7 @@ async fn main() -> anyhow::Result<()> {
                                 close_size,
                                 timestamp,
                             };
+
                             let hedge_result =
                                 manage_position_after_match(&client, &signer, hedge_config).await?;
                             match hedge_result.signum() {
@@ -181,9 +186,10 @@ async fn main() -> anyhow::Result<()> {
                                 close_size = order_size;
                             }
                             println!("Close size will be = {}", close_size);
-                            client.cancel_order(&first_order.order_id).await?;
+                            client.cancel_order(&first_order_id).await?;
                             println!("First order canceled, opening hedge order,,,");
                             let hedge_config = HedgeConfig {
+                                second_order_id: first_order_id.clone(),
                                 hedge_asset_id: tokens.first_asset_id,
                                 initial_asset_id: tokens.second_asset_id,
                                 hedge_size: order_size,
