@@ -59,7 +59,8 @@ async fn main() -> anyhow::Result<()> {
     loop {
         let timestamp = nearest_quarter_hour();
         if !allow_trade(timestamp, 90) {
-            println!("Not time to trade already");
+            println!("Not time to trade already, sleeping for 30 seconds");
+            sleep(Duration::from_secs(30)).await;
             continue;
         }
         let tokens = get_tokens(&http_client, &timestamp, Asset::ETH)
@@ -99,8 +100,7 @@ async fn main() -> anyhow::Result<()> {
                             is_trade_allowed, first_order_status.status
                         );
                         if !is_trade_allowed
-                            && first_order_status.status != "MATCHED"
-                            && first_order_status.status != "CANCELED"
+                            && first_order_status.status == "LIVE"
                         {
                             let has_open_position_first =
                                 !first_order_status.size_matched.is_zero();
@@ -142,8 +142,7 @@ async fn main() -> anyhow::Result<()> {
                             client.order(&second_order.order_id.as_str()).await?;
                         println!("Second order status: {:?}", second_order_status.status);
                         if !allow_trade(timestamp, 30)
-                            && second_order_status.status != "MATCHED"
-                            && second_order_status.status != "CANCELED"
+                            && second_order_status.status == "LIVE"
                         {
                             let has_open_position_second =
                                 !second_order_status.size_matched.is_zero();
