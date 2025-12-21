@@ -40,6 +40,16 @@ pub fn allow_stop_loss(market_timestamp: i64, grace_seconds: i64) -> bool {
     seconds_since_start >= grace_seconds
 }
 
+// if before market start left <= grace_seconds, we can't trade
+pub fn allow_trade(market_timestamp: i64, grace_seconds: i64) -> bool {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time went backwards")
+        .as_secs() as i64;
+
+    now < market_timestamp - grace_seconds
+}
+
 pub fn nearest_quarter_hour() -> i64 {
     let now = Local::now();
 
@@ -69,9 +79,10 @@ pub fn nearest_quarter_hour() -> i64 {
 pub async fn get_tokens(
     http_client: &http_client,
     timestamp: &i64,
-    asset: Asset
+    asset: Asset,
 ) -> Result<MarketResponse, reqwest::Error> {
-    let url = format!("https://gamma-api.polymarket.com/markets/slug/{asset}-updown-15m-{timestamp}");
+    let url =
+        format!("https://gamma-api.polymarket.com/markets/slug/{asset}-updown-15m-{timestamp}");
     let resp = http_client.get(&url).send().await?;
 
     let api_resp: MarketApiResponse = resp.json().await?;

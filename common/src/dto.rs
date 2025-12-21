@@ -1,6 +1,6 @@
-use std::fmt;
 use serde;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fmt::{Display, Formatter, write};
 
 #[derive(Debug, Deserialize)]

@@ -55,19 +55,23 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         let timestamp = nearest_quarter_hour();
+        if !allow_trade(timestamp, 60) {
+            println!("Not time to trade already");
+            continue;
+        }
         let tokens = get_tokens(&http_client, &timestamp, Asset::SOL)
             .await
             .expect(
                 "Failed to get tokens from API. Please check your network connection and try again later.",
             );
 
-        println!("win count: {}, loss count: {} | {}", win_count, loss_count, Asset::SOL);
+        println!(
+            "win count: {}, loss count: {} | {}",
+            win_count,
+            loss_count,
+            Asset::SOL
+        );
 
-        // skip if we already completed this timestamp
-        // if completed_timestamps.contains(&timestamp) {
-        //     println!("Already completed timestamp: {}", timestamp);
-        //     continue;
-        // }
         'open_position: loop {
             match open_start_positions(
                 &client,

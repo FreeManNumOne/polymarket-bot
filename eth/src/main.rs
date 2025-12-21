@@ -55,19 +55,23 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         let timestamp = nearest_quarter_hour();
+        if !allow_trade(timestamp, 60) {
+            println!("Not time to trade already");
+            continue;
+        }
         let tokens = get_tokens(&http_client, &timestamp, Asset::ETH)
             .await
             .expect(
                 "Failed to get tokens from API. Please check your network connection and try again later.",
             );
 
-        println!("win count: {}, loss count: {} | {}", win_count, loss_count, Asset::ETH);
+        println!(
+            "win count: {}, loss count: {} | {}",
+            win_count,
+            loss_count,
+            Asset::ETH
+        );
 
-        // skip if we already completed this timestamp
-        // if completed_timestamps.contains(&timestamp) {
-        //     println!("Already completed timestamp: {}", timestamp);
-        //     continue;
-        // }
         'open_position: loop {
             match open_start_positions(
                 &client,
@@ -126,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
                                         tokens.first_asset_id,
                                         order_size,
                                     )
-                                        .await?;
+                                    .await?;
                                     println!("Initial position closed: {:?}", closed_order);
                                     loss_count += 1;
                                     break 'hedge_order_loop;
@@ -179,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
                                         tokens.second_asset_id,
                                         order_size,
                                     )
-                                        .await?;
+                                    .await?;
                                     println!("Initial position closed: {:?}", closed_order);
                                     loss_count += 1;
                                     break 'hedge_order_loop;

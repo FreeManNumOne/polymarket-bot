@@ -4,6 +4,7 @@ use alloy::signers::Signer as _;
 use alloy::signers::local::LocalSigner;
 use alloy_primitives::Address;
 
+use common::*;
 use polymarket_client_sdk::clob::{Client, Config};
 use polymarket_client_sdk::types::{OpenOrderResponse, PriceResponse, SignatureType};
 use polymarket_client_sdk::{POLYGON, PRIVATE_KEY_VAR};
@@ -13,7 +14,6 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use common::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -57,19 +57,23 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         let timestamp = nearest_quarter_hour();
+        if !allow_trade(timestamp, 60) {
+            println!("Not time to trade already");
+            continue;
+        }
         let tokens = get_tokens(&http_client, &timestamp, Asset::XRP)
             .await
             .expect(
                 "Failed to get tokens from API. Please check your network connection and try again later.",
             );
 
-        println!("win count: {}, loss count: {} | {}", win_count, loss_count, Asset::XRP);
+        println!(
+            "win count: {}, loss count: {} | {}",
+            win_count,
+            loss_count,
+            Asset::XRP
+        );
 
-        // skip if we already completed this timestamp
-        // if completed_timestamps.contains(&timestamp) {
-        //     println!("Already completed timestamp: {}", timestamp);
-        //     continue;
-        // }
         'open_position: loop {
             match open_start_positions(
                 &client,
@@ -78,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
                 limit_enter_price,
                 tokens.clone(),
             )
-                .await
+            .await
             {
                 Ok(Some(orders)) => {
                     println!("Opened positions: {:?}", orders);
@@ -100,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
                                 order_size,
                                 hedge_enter_price,
                             )
-                                .await?;
+                            .await?;
                             println!("Hedge order placed");
                             sleep(Duration::from_secs(10)).await;
                             'hedge_order_loop: loop {
@@ -128,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
                                         tokens.first_asset_id,
                                         order_size,
                                     )
-                                        .await?;
+                                    .await?;
                                     println!("Initial position closed: {:?}", closed_order);
                                     loss_count += 1;
                                     break 'hedge_order_loop;
@@ -151,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
                                 order_size,
                                 hedge_enter_price,
                             )
-                                .await?;
+                            .await?;
                             println!("Hedge order placed");
                             sleep(Duration::from_secs(10)).await;
                             'hedge_order_loop: loop {
@@ -181,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
                                         tokens.second_asset_id,
                                         order_size,
                                     )
-                                        .await?;
+                                    .await?;
                                     println!("Initial position closed: {:?}", closed_order);
                                     loss_count += 1;
                                     break 'hedge_order_loop;
