@@ -10,6 +10,7 @@ use polymarket_client_sdk::types::{
 use polymarket_client_sdk::{POLYGON, PRIVATE_KEY_VAR};
 use reqwest::Client as http_client;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::Zero;
 use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
@@ -93,9 +94,94 @@ async fn main() -> anyhow::Result<()> {
                         let first_order_status: OpenOrderResponse =
                             client.order(&first_order.order_id.as_str()).await?;
                         println!("First order status: {:?}", first_order_status.status);
+                        if !allow_trade(timestamp, 30)
+                            && first_order_status.status != "MATCHED"
+                            && first_order_status.status != "CANCELED"
+                        {
+                            let has_open_position_first =
+                                !first_order_status.size_matched.is_zero();
+                            if has_open_position_first {
+                                client.cancel_order(&first_order.order_id).await?;
+                                println!("Cancelled first order, closing now");
+                                let first_order_status: OpenOrderResponse =
+                                    client.order(&first_order.order_id.as_str()).await?;
+                                println!(
+                                    "Time's up to wait for first order opening, going to close it with size = {}",
+                                    first_order_status.size_matched
+                                );
+                                let closed_order: PostOrderResponse;
+                                loop {
+                                    let response = close_order_by_market(
+                                        &client,
+                                        &signer,
+                                        &tokens.first_asset_id,
+                                        first_order_status.size_matched,
+                                    )
+                                        .await?;
+
+                                    match response.error_msg.as_deref() {
+                                        Some("") | None => {
+                                            // успех
+                                            closed_order = response;
+                                            println!("Initial position closed: {:?}", closed_order);
+                                            break;
+                                        }
+                                        Some(err) => {
+                                            println!("close order failed: {}", err);
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        let second_order_status: OpenOrderResponse =
+                            client.order(&second_order.order_id.as_str()).await?;
+                        println!("Second order status: {:?}", second_order_status.status);
+                        if !allow_trade(timestamp, 30)
+                            && second_order_status.status != "MATCHED"
+                            && second_order_status.status != "CANCELED"
+                        {
+                            let has_open_position_second =
+                                !second_order_status.size_matched.is_zero();
+                            if has_open_position_second {
+                                client.cancel_order(&second_order.order_id).await?;
+                                println!("Cancelled first order, closing now");
+                                let second_order_status: OpenOrderResponse =
+                                    client.order(&second_order.order_id.as_str()).await?;
+                                println!(
+                                    "Time's up to wait for second order opening, going to close it with size = {}",
+                                    second_order_status.size_matched
+                                );
+                                let closed_order: PostOrderResponse;
+                                loop {
+                                    let response = close_order_by_market(
+                                        &client,
+                                        &signer,
+                                        &tokens.second_asset_id,
+                                        second_order_status.size_matched,
+                                    )
+                                        .await?;
+
+                                    match response.error_msg.as_deref() {
+                                        Some("") | None => {
+                                            // успех
+                                            closed_order = response;
+                                            println!("Initial position closed: {:?}", closed_order);
+                                            break;
+                                        }
+                                        Some(err) => {
+                                            println!("close order failed: {}", err);
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if first_order_status.status == "MATCHED" {
                             println!("First order matched");
                             let close_size = first_order_status.size_matched;
+                            println!("Close size will be = {}", close_size);
                             client.cancel_order(&second_order.order_id).await?;
                             println!("Second order canceled, opening hedge order,,,");
                             let hedge_order: OrderResponse = place_hedge_order(
@@ -158,13 +244,11 @@ async fn main() -> anyhow::Result<()> {
                             }
                             break;
                         }
-                        sleep(Duration::from_secs(1)).await;
-                        let second_order_status: OpenOrderResponse =
-                            client.order(&second_order.order_id.as_str()).await?;
-                        println!("Second order status: {:?}", second_order_status.status);
+
                         if second_order_status.status == "MATCHED" {
                             println!("Second order matched");
                             let close_size = second_order_status.size_matched;
+                            println!("Close size will be = {}", close_size);
                             client.cancel_order(&first_order.order_id).await?;
                             println!("First order canceled, opening hedge order,,,");
                             let hedge_order: OrderResponse = place_hedge_order(
