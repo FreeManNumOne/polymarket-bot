@@ -121,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
                                 };
                                 prevent_holding_position(&client, &signer, prevent_holding_config)
                                     .await?;
+                                break 'open_position;
                             }
                         }
                         let second_order_status: OpenOrderResponse =
@@ -147,6 +148,7 @@ async fn main() -> anyhow::Result<()> {
                                 };
                                 prevent_holding_position(&client, &signer, prevent_holding_config)
                                     .await?;
+                                break 'open_position;
                             }
                         }
 
