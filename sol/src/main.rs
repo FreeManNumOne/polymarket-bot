@@ -130,7 +130,10 @@ async fn main() -> anyhow::Result<()> {
 
                         if first_order_status.status == "MATCHED" {
                             println!("First order matched: {:?}", first_order_status);
-                            let close_size = floor_dp(first_order_status.size_matched, 2);
+                            let mut close_size = floor_dp(first_order_status.size_matched, 2);
+                            if close_size == Decimal::zero() {
+                                close_size = order_size;
+                            }
                             println!("Close size will be = {}", close_size);
                             client.cancel_order(&second_order.order_id).await?;
                             println!("Second order canceled, opening hedge order,,,");
@@ -154,7 +157,10 @@ async fn main() -> anyhow::Result<()> {
 
                         if second_order_status.status == "MATCHED" {
                             println!("Second order matched: {:?}", second_order_status);
-                            let close_size = floor_dp(second_order_status.size_matched, 2);
+                            let mut close_size = floor_dp(second_order_status.size_matched, 2);
+                            if close_size == Decimal::zero() {
+                                close_size = order_size;
+                            }
                             println!("Close size will be = {}", close_size);
                             client.cancel_order(&first_order.order_id).await?;
                             println!("First order canceled, opening hedge order,,,");
