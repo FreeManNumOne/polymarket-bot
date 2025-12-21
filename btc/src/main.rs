@@ -52,7 +52,6 @@ async fn main() -> anyhow::Result<()> {
 
     let ok = client.ok().await?;
     println!("Client setup ok?: {ok}");
-    let mut completed_timestamps: Vec<i64> = vec![];
     let mut win_count: u32 = 0;
     let mut loss_count: u32 = 0;
 
@@ -84,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                 limit_enter_price,
                 tokens.clone(),
             )
-                .await
+            .await
             {
                 Ok(Some(orders)) => {
                     println!("Opened positions: {:?}", orders);
@@ -229,8 +228,12 @@ async fn main() -> anyhow::Result<()> {
                             };
                             break;
                         }
+                        if first_order_status.status == "CANCELED"
+                            && second_order_status.status == "CANCELED"
+                        {
+                            break;
+                        }
                     }
-                    completed_timestamps.push(timestamp);
                     break 'open_position;
                 }
                 Ok(None) => {
