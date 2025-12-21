@@ -1,5 +1,5 @@
 use crate::dto::{Asset, OrderResponse};
-use crate::{MarketApiResponse, MarketResponse};
+use crate::{HedgeConfig, MarketApiResponse, MarketResponse, PreventHoldingConfig};
 use alloy::signers::k256::ecdsa::SigningKey;
 use alloy::signers::k256::ecdsa::signature::SignerMut;
 use alloy::signers::local::LocalSigner;
@@ -8,7 +8,8 @@ use polymarket_client_sdk::auth::Normal;
 use polymarket_client_sdk::clob::Client;
 use polymarket_client_sdk::clob::state::Authenticated;
 use polymarket_client_sdk::types::{
-    Amount, OrderType, PostOrderResponse, PriceRequestBuilder, PriceResponse, Side,
+    Amount, OpenOrderResponse, OrderType, PostOrderResponse, PriceRequestBuilder, PriceResponse,
+    Side,
 };
 use reqwest::Client as http_client;
 use rust_decimal::{Decimal, RoundingStrategy};
@@ -42,6 +43,107 @@ pub fn allow_stop_loss(market_timestamp: i64, grace_seconds: i64) -> bool {
 
 pub fn floor_dp(value: Decimal, dp: u32) -> Decimal {
     value.round_dp_with_strategy(dp, RoundingStrategy::ToZero)
+}
+
+pub async fn prevent_holding_position(
+    client: &Arc<Client<Authenticated<Normal>>>,
+    signer: &LocalSigner<SigningKey>,
+    prevent_holding_config: PreventHoldingConfig,
+) -> polymarket_client_sdk::Result<()> {
+    client
+        .cancel_order(&prevent_holding_config.order_id)
+        .await?;
+    println!("Cancelled first order, closing now");
+    let first_order_status: OpenOrderResponse = client
+        .order(&prevent_holding_config.order_id.as_str())
+        .await?;
+    let first_order_size = floor_dp(first_order_status.size_matched, 2);
+    println!(
+        "Time's up to wait for first order opening, going to close it with size = {}",
+        &first_order_size
+    );
+    let closed_order: PostOrderResponse;
+    loop {
+        let response = close_order_by_market(
+            &client,
+            &signer,
+            &prevent_holding_config.asset_id,
+            first_order_size,
+        )
+        .await?;
+
+        match response.error_msg.as_deref() {
+            Some("") | None => {
+                // успех
+                closed_order = response;
+                println!("Initial position closed: {:?}", closed_order);
+                return Ok(());
+            }
+            Some(err) => {
+                println!("close order failed: {}", err);
+                continue;
+            }
+        }
+    }
+}
+
+pub async fn manage_position_after_match(
+    client: &Arc<Client<Authenticated<Normal>>>,
+    signer: &LocalSigner<SigningKey>,
+    hedge_config: HedgeConfig,
+) -> polymarket_client_sdk::Result<i8> {
+    let hedge_order: OrderResponse = place_hedge_order(
+        &client,
+        &signer,
+        hedge_config.hedge_asset_id,
+        hedge_config.order_size,
+        hedge_config.hedge_enter_price,
+    )
+    .await?;
+    println!("Hedge order placed");
+    sleep(Duration::from_secs(10)).await;
+
+    loop {
+        let hedge_order_status: OpenOrderResponse =
+            client.order(&hedge_order.order_id.as_str()).await?;
+        println!("Hedge order status: {:?}", hedge_order_status.status);
+        if hedge_order_status.status == "MATCHED" {
+            println!("Hedge order matched");
+            return Ok(1);
+        }
+        sleep(Duration::from_secs(1)).await;
+        if hedge_order_status.status != "MATCHED" && allow_stop_loss(hedge_config.timestamp, 20) {
+            println!("Stop loss reached, cancelling hedge order and closing position...");
+            client.cancel_order(&hedge_order.order_id.as_str()).await?;
+            println!("Hedge order canceled");
+
+            let closed_order: PostOrderResponse;
+            loop {
+                let response = close_order_by_market(
+                    &client,
+                    &signer,
+                    &hedge_config.initial_asset_id,
+                    hedge_config.close_size,
+                )
+                .await?;
+
+                match response.error_msg.as_deref() {
+                    Some("") | None => {
+                        // успех
+                        closed_order = response;
+                        break;
+                    }
+                    Some(err) => {
+                        println!("close order failed: {}", err);
+                        continue;
+                    }
+                }
+            }
+
+            println!("Initial position closed: {:?}", closed_order);
+            return Ok(-1);
+        }
+    }
 }
 
 // if before market start left <= grace_seconds, we can't trade

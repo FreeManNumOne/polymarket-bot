@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -18,6 +19,22 @@ pub struct MarketResponse {
 #[derive(Debug, Clone)]
 pub struct OrderResponse {
     pub token_id: String,
+    pub order_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct HedgeConfig {
+    pub hedge_asset_id: String,
+    pub initial_asset_id: String,
+    pub order_size: Decimal,
+    pub hedge_enter_price: Decimal,
+    pub close_size: Decimal,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreventHoldingConfig {
+    pub asset_id: String,
     pub order_id: String,
 }
 
