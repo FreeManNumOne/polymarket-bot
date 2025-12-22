@@ -46,6 +46,42 @@ pub fn floor_dp(value: Decimal, dp: u32) -> Decimal {
     value.round_dp_with_strategy(dp, RoundingStrategy::ToZero)
 }
 
+pub async fn close_order_with_retry(
+    client: &Arc<Client<Authenticated<Normal>>>,
+    signer: &LocalSigner<SigningKey>,
+    asset_id: &String,
+    close_size: Decimal,
+    max_retries: usize,
+) -> Option<PostOrderResponse> {
+    let mut attempt = 0;
+
+    loop {
+        let response = close_order_by_market(&client, &signer, asset_id, close_size)
+            .await
+            .ok()?;
+
+        match response.error_msg.as_deref() {
+            Some("") | None => {
+                // успех
+                return Some(response);
+            }
+            Some(err) => {
+                attempt += 1;
+
+                if attempt >= max_retries {
+                    return None;
+                }
+                println!(
+                    "close_order failed (attempt {}/{}): {}",
+                    attempt, max_retries, err
+                );
+
+                sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+}
+
 pub async fn get_order_with_retry(
     client: &Arc<Client<Authenticated<Normal>>>,
     order_id: &str,
@@ -171,59 +207,45 @@ pub async fn manage_position_after_match(
                     );
                     closing_hedge_size = hedge_size;
                 }
-                let closed_order: PostOrderResponse;
-                loop {
-                    let response = close_order_by_market(
-                        &client,
-                        &signer,
-                        &hedge_config.hedge_asset_id,
-                        closing_hedge_size,
-                    )
-                    .await?;
-
-                    match response.error_msg.as_deref() {
-                        Some("") | None => {
-                            // успех
-                            closed_order = response;
-                            println!(
-                                "Hedge order after partially filling closed: {:?}",
-                                closed_order
-                            );
-                            break;
-                        }
-                        Some(err) => {
-                            println!("close order failed: {}", err);
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            let closed_order: PostOrderResponse;
-            loop {
-                let response = close_order_by_market(
-                    &client,
-                    &signer,
-                    &hedge_config.initial_asset_id,
-                    hedge_config.close_size,
+                match close_order_with_retry(
+                    client,
+                    signer,
+                    &hedge_config.hedge_asset_id,
+                    closing_hedge_size,
+                    30,
                 )
-                .await?;
-
-                match response.error_msg.as_deref() {
-                    Some("") | None => {
-                        // успех
-                        closed_order = response;
-                        break;
+                .await
+                {
+                    Some(closed_order) => {
+                        println!(
+                            "Hedge order after partially filling closed: {:?}",
+                            closed_order
+                        );
                     }
-                    Some(err) => {
-                        println!("close order failed: {}", err);
-                        continue;
+                    None => {
+                        println!("Failed to close hedge order");
                     }
                 }
             }
 
-            println!("Initial position closed: {:?}", closed_order);
-            return Ok(-1);
+            match close_order_with_retry(
+                client,
+                signer,
+                &hedge_config.initial_asset_id,
+                hedge_config.close_size,
+                30,
+            )
+            .await
+            {
+                Some(closed_order) => {
+                    println!("Initial position closed after sl: {:?}", closed_order);
+                    return Ok(-1);
+                }
+                None => {
+                    println!("Failed to close initial position");
+                    return Ok(0);
+                }
+            }
         }
     }
 }
