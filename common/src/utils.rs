@@ -177,9 +177,8 @@ pub async fn prevent_holding_position(
         close_size: first_order_size,
         timestamp: prevent_holding_config.hedge_config.timestamp,
     };
-    loop {
-        manage_position_after_match(client, signer, true_hedge_config.clone()).await?;
-    }
+    manage_position_after_match(client, signer, true_hedge_config.clone()).await?;
+    Ok(())
 }
 
 pub fn normalized_size(size: Decimal, fallback: Decimal) -> Decimal {
