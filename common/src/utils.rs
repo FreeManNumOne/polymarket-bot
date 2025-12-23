@@ -118,6 +118,7 @@ pub async fn handle_matched(
     cancel_order_id: &str,
     hedge_config: HedgeConfig,
 ) -> polymarket_client_sdk::Result<i8> {
+    println!("Cancelling another order...");
     client.cancel_order(cancel_order_id).await?;
     manage_position_after_match(client, signer, hedge_config).await
 }
@@ -198,13 +199,17 @@ pub async fn manage_position_after_match(
 ) -> polymarket_client_sdk::Result<i8> {
     let second_order_status: OpenOrderResponse =
         get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30).await?;
+    if second_order_status.status != "CANCELED" {
+        println!("Cancelling second order...");
+        client
+            .cancel_order(hedge_config.second_order_id.as_str())
+            .await?;
+        println!("Second order cancelled");
+    }
+    let second_order_status: OpenOrderResponse =
+        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30).await?;
     let mut hedge_size = hedge_config.hedge_size;
     if second_order_status.size_matched > Decimal::zero() {
-        if second_order_status.status != "CANCELED" {
-            client
-                .cancel_order(hedge_config.second_order_id.as_str())
-                .await?;
-        }
         let closing_second_size = floor_dp(second_order_status.size_matched, 2);
         println!(
             "Second order partially matched with size: {}",
