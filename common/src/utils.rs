@@ -248,12 +248,12 @@ pub async fn manage_position_after_match(
             sleep(Duration::from_secs(1)).await;
             let hedge_order_status: OpenOrderResponse =
                 get_order_with_retry(client, hedge_order.order_id.as_str(), 10).await?;
-            return if hedge_order_status.size_matched > Decimal::zero()
+            if hedge_order_status.size_matched > Decimal::zero()
                 && hedge_order_status.size_matched != hedge_size
             {
-                println!("Hedge order partially matched, closing first position partially...");
+                println!("Hedge order partially matched, closing it...");
                 let left_to_fill = hedge_size - hedge_order_status.size_matched;
-                if left_to_fill > Decimal::from_str_exact("5").unwrap() {
+                return if left_to_fill > Decimal::from_str_exact("5").unwrap() {
                     if let Some(closed_order) = close_position_with_retry(
                         client,
                         signer,
@@ -261,7 +261,7 @@ pub async fn manage_position_after_match(
                         left_to_fill,
                         30,
                     )
-                        .await
+                    .await
                     {
                         println!(
                             "Initial position partially closed after partial hedge filling: {:?}",
@@ -282,7 +282,7 @@ pub async fn manage_position_after_match(
                         closing_hedge_size,
                         30,
                     )
-                        .await
+                    .await
                     {
                         println!(
                             "Hedge order after partially filling closed: {:?}",
@@ -299,7 +299,7 @@ pub async fn manage_position_after_match(
                         hedge_config.close_size,
                         30,
                     )
-                        .await
+                    .await
                     {
                         println!("Initial position closed after sl: {:?}", closed_order);
                         Ok(-1)
@@ -307,23 +307,7 @@ pub async fn manage_position_after_match(
                         println!("Failed to close initial position");
                         Ok(0)
                     }
-                }
-            } else {
-                if let Some(closed_order) = close_position_with_retry(
-                    client,
-                    signer,
-                    &hedge_config.initial_asset_id,
-                    hedge_config.close_size,
-                    30,
-                )
-                    .await
-                {
-                    println!("Initial position closed after sl: {:?}", closed_order);
-                    Ok(-1)
-                } else {
-                    println!("Failed to close initial position");
-                    Ok(0)
-                }
+                };
             }
         }
     }
