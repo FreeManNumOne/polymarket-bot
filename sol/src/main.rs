@@ -4,13 +4,10 @@ use alloy_primitives::Address;
 
 use common::*;
 use polymarket_client_sdk::clob::{Client, Config};
-use polymarket_client_sdk::types::{
-    OpenOrderResponse, PostOrderResponse, PriceResponse, SignatureType,
-};
+use polymarket_client_sdk::types::SignatureType;
 use polymarket_client_sdk::{POLYGON, PRIVATE_KEY_VAR};
 use reqwest::Client as http_client;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::Zero;
 use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
