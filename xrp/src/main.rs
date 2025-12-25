@@ -2,23 +2,49 @@ use alloy::signers::Signer as _;
 use alloy::signers::local::LocalSigner;
 use alloy_primitives::Address;
 
+use axum::{Router, routing::get};
 use common::*;
 use polymarket_client_sdk::clob::{Client, Config};
-use polymarket_client_sdk::types::{
-    OpenOrderResponse, PostOrderResponse, PriceResponse, SignatureType,
-};
+use polymarket_client_sdk::types::SignatureType;
 use polymarket_client_sdk::{POLYGON, PRIVATE_KEY_VAR};
+use prometheus::{Encoder, TextEncoder};
 use reqwest::Client as http_client;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::Zero;
+use std::net::SocketAddr;
 use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::TcpListener;
+use tokio::task;
 use tokio::time::sleep;
+
+async fn metrics_handler() -> String {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+
+    let mut buffer = Vec::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+
+    String::from_utf8(buffer).unwrap()
+}
+
+fn start_metrics_server(port: u16) {
+    tokio::spawn(async move {
+        let app = Router::new().route("/metrics", get(metrics_handler));
+
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        println!("📊 Metrics server started on {}", addr);
+
+        let listener = TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
+    });
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+
+    start_metrics_server(9104);
 
     let private_key = std::env::var(PRIVATE_KEY_VAR).expect("Need a private key");
     let funder_addr = std::env::var("PM_ADDRESS").expect("Need a funder address");
@@ -121,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
                                     close_size,
                                     hedge_enter_price,
                                     timestamp,
-                                    asset: Asset::XRP
+                                    asset: Asset::XRP,
                                 },
                             )
                                 .await?;
@@ -149,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
                                     close_size,
                                     hedge_enter_price,
                                     timestamp,
-                                    asset: Asset::XRP
+                                    asset: Asset::XRP,
                                 },
                             )
                                 .await?;
@@ -185,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
                                         close_size: size,
                                         hedge_enter_price,
                                         timestamp,
-                                        asset: Asset::XRP
+                                        asset: Asset::XRP,
                                     },
                                     &first_order_id,
                                 )
@@ -209,7 +235,7 @@ async fn main() -> anyhow::Result<()> {
                                         close_size: size,
                                         hedge_enter_price,
                                         timestamp,
-                                        asset: Asset::XRP
+                                        asset: Asset::XRP,
                                     },
                                     &second_order_id,
                                 )

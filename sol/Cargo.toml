@@ -13,3 +13,5 @@ dotenvy = { workspace = true }
 rust_decimal = { workspace = true }
 reqwest = { workspace = true }
 common = { path = "../common" }
+axum = { workspace = true }
+prometheus = { workspace = true }
