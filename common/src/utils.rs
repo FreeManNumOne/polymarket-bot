@@ -241,7 +241,7 @@ pub async fn manage_position_after_match(
             return Ok(1);
         }
         sleep(Duration::from_secs(1)).await;
-        if hedge_order_status.status != "MATCHED" && allow_stop_loss(hedge_config.timestamp, 60) {
+        if hedge_order_status.status != "MATCHED" && allow_stop_loss(hedge_config.timestamp, 15) {
             println!("Stop loss reached, cancelling hedge order and closing position...");
             client.cancel_order(&hedge_order.order_id.as_str()).await?;
             println!("Hedge order canceled");
