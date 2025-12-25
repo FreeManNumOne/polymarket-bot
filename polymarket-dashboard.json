@@ -120,12 +120,12 @@
 
     {
       "type": "stat",
-      "title": "Match Rate %",
+      "title": "Win rate %",
       "gridPos": { "x": 0, "y": 32, "w": 12, "h": 4 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "100 * sum(pm_orders_matched_total{asset=~\"$asset\"}) / sum(pm_orders_total{asset=~\"$asset\"})"
+          "expr": "100 * sum(pm_orders_matched_total{asset=~\"$asset\"}) / sum(pm_hedge_orders_total{asset=~\"$asset\"})"
         }
       ],
       "fieldConfig": {
