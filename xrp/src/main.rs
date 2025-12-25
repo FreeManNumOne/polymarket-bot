@@ -1,3 +1,4 @@
+use std::env;
 use alloy::signers::Signer as _;
 use alloy::signers::local::LocalSigner;
 use alloy_primitives::Address;
@@ -18,6 +19,13 @@ use tokio::net::TcpListener;
 use tokio::task;
 use tokio::time::sleep;
 
+fn get_metrics_port() -> u16 {
+    env::var("METRICS_PORT")
+        .unwrap_or_else(|_| "9101".to_string()) // дефолтный порт
+        .parse()
+        .expect("METRICS_PORT must be a valid number")
+}
+
 async fn metrics_handler() -> String {
     let encoder = TextEncoder::new();
     let metric_families = prometheus::gather();
@@ -30,21 +38,27 @@ async fn metrics_handler() -> String {
 
 fn start_metrics_server(port: u16) {
     tokio::spawn(async move {
-        let app = Router::new().route("/metrics", get(metrics_handler));
+        let app = axum::Router::new().route("/metrics", axum::routing::get(metrics_handler));
 
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
         println!("📊 Metrics server started on {}", addr);
 
-        let listener = TcpListener::bind(addr).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .expect("Failed to bind metrics port");
+        axum::serve(listener, app)
+            .await
+            .expect("Metrics server crashed");
     });
 }
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    start_metrics_server(9104);
+    let port = get_metrics_port();
+    start_metrics_server(port);
 
     let private_key = std::env::var(PRIVATE_KEY_VAR).expect("Need a private key");
     let funder_addr = std::env::var("PM_ADDRESS").expect("Need a funder address");
