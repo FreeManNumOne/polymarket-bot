@@ -135,9 +135,9 @@ async fn main() -> anyhow::Result<()> {
                         let first_order_id = first_order.order_id.clone();
                         let second_order_id = second_order.order_id.clone();
                         let first_order =
-                            get_order_with_retry(&client, &first_order_id.as_str(), 10).await?;
+                            get_order_with_retry(&client, &first_order_id.as_str(), 10, &Asset::SOL).await?;
                         let second_order =
-                            get_order_with_retry(&client, &second_order_id.as_str(), 10).await?;
+                            get_order_with_retry(&client, &second_order_id.as_str(), 10, &Asset::SOL).await?;
 
                         // if left lest than grace_seconds till market open we don't want to wait anymore to open positions
                         let is_holding_allowed = allow_trade(timestamp, 10);

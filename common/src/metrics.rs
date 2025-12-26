@@ -90,7 +90,7 @@ lazy_static! {
         register_int_counter_vec!(
             "retries_total",
             "Total retries",
-            &["operation"]
+            &["asset", "operation"]
         ).unwrap();
 
     // 🔹 PnL

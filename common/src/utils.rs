@@ -74,6 +74,7 @@ pub async fn close_position_with_retry(
     asset_id: &String,
     close_size: Decimal,
     max_retries: usize,
+    asset: &Asset
 ) -> Option<PostOrderResponse> {
     let mut attempt = 0;
 
@@ -89,7 +90,7 @@ pub async fn close_position_with_retry(
             }
             Some(err) => {
                 attempt += 1;
-                RETRIES_TOTAL.with_label_values(&["close_position"]).inc();
+                RETRIES_TOTAL.with_label_values(&[asset.to_string().as_str(), "close_position"]).inc();
 
                 if attempt >= max_retries {
                     return None;
@@ -109,6 +110,7 @@ pub async fn get_order_with_retry(
     client: &Arc<Client<Authenticated<Normal>>>,
     order_id: &str,
     max_retries: usize,
+    asset: &Asset
 ) -> polymarket_client_sdk::Result<OpenOrderResponse> {
     let mut attempt = 0;
 
@@ -118,7 +120,7 @@ pub async fn get_order_with_retry(
 
             Err(err) => {
                 attempt += 1;
-                RETRIES_TOTAL.with_label_values(&["close_position"]).inc();
+                RETRIES_TOTAL.with_label_values(&[asset.to_string().as_str(), "close_position"]).inc();
 
                 if attempt >= max_retries {
                     return Err(err);
@@ -221,7 +223,7 @@ pub async fn prevent_holding_position(
     println!("Cancelled first order, closing now");
 
     let first_order_status: OpenOrderResponse =
-        get_order_with_retry(&client, &prevent_holding_config.order_id.as_str(), 30).await?;
+        get_order_with_retry(&client, &prevent_holding_config.order_id.as_str(), 30, &prevent_holding_config.hedge_config.asset).await?;
     let first_order_size = normalized_size(
         first_order_status.size_matched,
         prevent_holding_config.hedge_config.hedge_size,
@@ -260,7 +262,7 @@ pub async fn manage_position_after_match(
     hedge_config: HedgeConfig,
 ) -> polymarket_client_sdk::Result<i8> {
     let second_order_status: OpenOrderResponse =
-        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30).await?;
+        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30, &hedge_config.asset).await?;
     if second_order_status.status != "CANCELED" {
         println!("Cancelling second order...");
         ORDERS_CANCELLED_TOTAL
@@ -276,7 +278,7 @@ pub async fn manage_position_after_match(
         println!("Second order cancelled");
     }
     let second_order_status: OpenOrderResponse =
-        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30).await?;
+        get_order_with_retry(client, hedge_config.second_order_id.as_str(), 30, &hedge_config.asset).await?;
     let mut hedge_size = hedge_config.hedge_size;
     if second_order_status.size_matched > Decimal::zero() {
         ORDERS_PARTIAL_TOTAL
@@ -308,7 +310,7 @@ pub async fn manage_position_after_match(
 
     loop {
         let hedge_order_status: OpenOrderResponse =
-            get_order_with_retry(client, hedge_order.order_id.as_str(), 20).await?;
+            get_order_with_retry(client, hedge_order.order_id.as_str(), 20, &hedge_config.asset).await?;
         println!("Hedge order status: {:?}", hedge_order_status.status);
         if hedge_order_status.status == "MATCHED" {
             HEDGE_ORDERS_MATCHED_TOTAL
@@ -338,7 +340,7 @@ pub async fn manage_position_after_match(
             println!("Hedge order canceled");
             sleep(Duration::from_secs(1)).await;
             let hedge_order_status: OpenOrderResponse =
-                get_order_with_retry(client, hedge_order.order_id.as_str(), 10).await?;
+                get_order_with_retry(client, hedge_order.order_id.as_str(), 10, &hedge_config.asset).await?;
             if hedge_order_status.size_matched > Decimal::zero()
                 && hedge_order_status.size_matched != hedge_size
             {
@@ -355,6 +357,7 @@ pub async fn manage_position_after_match(
                     &hedge_config.hedge_asset_id,
                     closing_hedge_size,
                     30,
+                    &hedge_config.asset
                 )
                 .await
                 {
@@ -373,6 +376,7 @@ pub async fn manage_position_after_match(
                 &hedge_config.initial_asset_id,
                 hedge_config.close_size,
                 30,
+                &hedge_config.asset
             )
             .await
             {
