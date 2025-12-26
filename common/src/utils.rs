@@ -120,7 +120,7 @@ pub async fn get_order_with_retry(
 
             Err(err) => {
                 attempt += 1;
-                RETRIES_TOTAL.with_label_values(&[asset.to_string().as_str(), "close_position"]).inc();
+                RETRIES_TOTAL.with_label_values(&[asset.to_string().as_str(), "get_order"]).inc();
 
                 if attempt >= max_retries {
                     return Err(err);
