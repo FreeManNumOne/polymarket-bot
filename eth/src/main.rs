@@ -1,24 +1,64 @@
+use std::env;
 use alloy::signers::Signer as _;
 use alloy::signers::local::LocalSigner;
 use alloy_primitives::Address;
 
+use axum::{Router, routing::get};
 use common::*;
 use polymarket_client_sdk::clob::{Client, Config};
-use polymarket_client_sdk::types::{
-    OpenOrderResponse, PostOrderResponse, PriceResponse, SignatureType,
-};
+use polymarket_client_sdk::types::SignatureType;
 use polymarket_client_sdk::{POLYGON, PRIVATE_KEY_VAR};
+use prometheus::{Encoder, TextEncoder};
 use reqwest::Client as http_client;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::Zero;
+use std::net::SocketAddr;
 use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::TcpListener;
+use tokio::task;
 use tokio::time::sleep;
+
+fn get_metrics_port() -> u16 {
+    env::var("METRICS_PORT")
+        .unwrap_or_else(|_| "9101".to_string()) // дефолтный порт
+        .parse()
+        .expect("METRICS_PORT must be a valid number")
+}
+
+async fn metrics_handler() -> String {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+
+    let mut buffer = Vec::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+
+    String::from_utf8(buffer).unwrap()
+}
+
+fn start_metrics_server(port: u16) {
+    tokio::spawn(async move {
+        let app = axum::Router::new().route("/metrics", axum::routing::get(metrics_handler));
+
+        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+        println!("📊 Metrics server started on {}", addr);
+
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .expect("Failed to bind metrics port");
+        axum::serve(listener, app)
+            .await
+            .expect("Metrics server crashed");
+    });
+}
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+
+    let port = get_metrics_port();
+    start_metrics_server(port);
 
     let private_key = std::env::var(PRIVATE_KEY_VAR).expect("Need a private key");
     let funder_addr = std::env::var("PM_ADDRESS").expect("Need a funder address");
@@ -95,9 +135,9 @@ async fn main() -> anyhow::Result<()> {
                         let first_order_id = first_order.order_id.clone();
                         let second_order_id = second_order.order_id.clone();
                         let first_order =
-                            get_order_with_retry(&client, &first_order_id.as_str(), 10).await?;
+                            get_order_with_retry(&client, &first_order_id.as_str(), 10, &Asset::ETH).await?;
                         let second_order =
-                            get_order_with_retry(&client, &second_order_id.as_str(), 10).await?;
+                            get_order_with_retry(&client, &second_order_id.as_str(), 10, &Asset::ETH).await?;
 
                         // if left lest than grace_seconds till market open we don't want to wait anymore to open positions
                         let is_holding_allowed = allow_trade(timestamp, 10);
@@ -121,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
                                     close_size,
                                     hedge_enter_price,
                                     timestamp,
+                                    asset: Asset::ETH,
                                 },
                             )
                                 .await?;
@@ -148,6 +189,7 @@ async fn main() -> anyhow::Result<()> {
                                     close_size,
                                     hedge_enter_price,
                                     timestamp,
+                                    asset: Asset::ETH,
                                 },
                             )
                                 .await?;
@@ -183,6 +225,7 @@ async fn main() -> anyhow::Result<()> {
                                         close_size: size,
                                         hedge_enter_price,
                                         timestamp,
+                                        asset: Asset::ETH,
                                     },
                                     &first_order_id,
                                 )
@@ -206,6 +249,7 @@ async fn main() -> anyhow::Result<()> {
                                         close_size: size,
                                         hedge_enter_price,
                                         timestamp,
+                                        asset: Asset::ETH,
                                     },
                                     &second_order_id,
                                 )
