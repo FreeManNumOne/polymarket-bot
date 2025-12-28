@@ -1,3 +1,8 @@
 /target
 .idea/
 .env
+/auto-claim/.venv
+/auto-claim/bin
+/auto-claim/include
+/auto-claim/lib
+/auto-claim/pyvenv.cfg
